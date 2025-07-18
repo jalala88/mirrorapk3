@@ -13,50 +13,57 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Dependencies
+      - name: Install Dependencies (Java, Python, Buildozer)
         run: |
           sudo apt update
           sudo apt install -y python3-pip python3-setuptools python3-wheel build-essential \
-                              git zip unzip wget openjdk-17-jdk libssl-dev zlib1g-dev
+                              git zip unzip wget openjdk-17-jdk
           pip install --upgrade pip
-          pip install --upgrade buildozer cython virtualenv
+          pip install --upgrade buildozer cython
 
-      - name: Setup Android SDK
+      - name: Install Android SDK Command Line Tools
         run: |
           mkdir -p $HOME/android-sdk/cmdline-tools
           wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O commandlinetools.zip
           unzip commandlinetools.zip -d $HOME/android-sdk/cmdline-tools
           mv $HOME/android-sdk/cmdline-tools/cmdline-tools $HOME/android-sdk/cmdline-tools/latest
-          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "$HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-sdk/platform-tools:$HOME/android-sdk/build-tools/33.0.2" >> $GITHUB_PATH
 
-      - name: Accept Licenses and Install Packages
+          # Set PATH for sdkmanager
+          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+
+      - name: Install Android SDK Packages
         run: |
-          yes | sdkmanager --licenses
-          sdkmanager --install "platform-tools" "platforms;android-33" "build-tools;33.0.2"
-          sdkmanager --install "ndk;21.4.7075529"
+          sdkmanager --sdk_root=$HOME/android-sdk --licenses || true
+          sdkmanager --sdk_root=$HOME/android-sdk \
+            "platform-tools" \
+            "platforms;android-33" \
+            "build-tools;33.0.2" \
+            "ndk;21.4.7075529"
+
+      - name: Set Environment Variables for Buildozer
+        run: |
+          echo "ANDROIDSDK=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "ANDROIDNDK=$HOME/android-sdk/ndk/21.4.7075529" >> $GITHUB_ENV
+          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
+          echo "$HOME/android-sdk/build-tools/33.0.2" >> $GITHUB_PATH
 
       - name: Initialize Buildozer
         run: |
-          buildozer init
-          # Force create the android platform directory
-          mkdir -p .buildozer/android/platform
-          # Update buildozer.spec with correct paths
-          sed -i 's|^android.sdk_path = .*|android.sdk_path = /home/runner/android-sdk|' buildozer.spec
-          sed -i 's|^android.ndk_path = .*|android.ndk_path = /home/runner/android-sdk/ndk/21.4.7075529|' buildozer.spec
-          sed -i 's|^android.p4a_dir = .*|android.p4a_dir = /home/runner/work/_temp/.buildozer/android/platform/python-for-android|' buildozer.spec
+          buildozer init || true
+          sed -i 's/^requirements = python3/requirements = python3,kivy/' buildozer.spec
 
-      - name: Build APK (with retry)
+      - name: Pre-download python-for-android
         run: |
-          # First try might fail to download dependencies
-          buildozer android clean || true
-          # Second try with fresh download
+          mkdir -p .buildozer/android/platform
+          git clone https://github.com/kivy/python-for-android.git .buildozer/android/platform/python-for-android
+
+      - name: Build APK
+        run: |
           buildozer android debug
-          # Verify APK was created
-          ls -la bin/
 
       - name: Upload APK
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
