@@ -37,6 +37,13 @@ jobs:
           sdkmanager --sdk_root=$HOME/android-sdk --licenses || true
           sdkmanager --sdk_root=$HOME/android-sdk "platform-tools" "platforms;android-33" "build-tools;33.0.2" "ndk;21.4.7075529"
 
+      - name: Set Environment Variables for Buildozer
+        run: |
+          echo "ANDROIDSDK=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "ANDROIDNDK=$HOME/android-sdk/ndk/21.4.7075529" >> $GITHUB_ENV
+          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "PATH=$PATH:$HOME/android-sdk/platform-tools:$HOME/android-sdk/build-tools/33.0.2" >> $GITHUB_ENV
+
       - name: Build APK
         run: |
           buildozer android debug
